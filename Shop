@@ -1,0 +1,34 @@
+--  Main Section
+local MainSection = Window:Section({ Title = "SHOP", Opened = true })
+
+-- Tab trong Main
+local STab = MainSection:Tab({ Title = "shop", Icon = "zap" })
+
+STab:Button({
+    Title = "open BlockShop",
+    Callback = function()
+        local player = game:GetService("Players").LocalPlayer
+        local shop = player.PlayerGui:FindFirstChild("Main") and player.PlayerGui.Main:FindFirstChild("BlockShop")
+        
+        if shop then
+            if shop:IsA("ScreenGui") then
+                shop.Enabled = true
+            else
+                shop.Visible = true
+            end
+
+            WindUI:Notify({
+                Title = "BlockShop",
+                Content = "opened BlockShop",
+                Duration = 2
+            })
+        else
+            WindUI:Notify({
+                Title = "BlockShop",
+                Content = " Không tìm thy BlockShop",
+                Duration = 2
+            })
+            warn("Không tìm thy BlockShop!")
+        end
+    end
+})
