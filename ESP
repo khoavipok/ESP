@@ -1,0 +1,250 @@
+--  Main Section
+local MainSection = Window:Section({ Title = "esp", Opened = true })
+
+-- Tab trong Main
+local ESPTab = MainSection:Tab({ Title = "esp", Icon = "zap" })
+
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LocalPlayer = Players.LocalPlayer
+
+local espObjects = {}
+local espConnections = {}
+
+-- Hàm to ESP khung toàn thân
+local function createESP(player)
+    if player == LocalPlayer then return end
+    if espObjects[player] then return end
+
+    local box = Drawing.new("Square")
+    box.Thickness = 2
+    box.Filled = false
+    box.Color = Color3.fromRGB(0, 255, 0)
+    espObjects[player] = box
+
+    local conn
+    conn = RunService.RenderStepped:Connect(function()
+        if not espObjects[player] then
+            if conn then conn:Disconnect() end
+            return
+        end
+
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+            local hrp = player.Character.HumanoidRootPart
+            local hum = player.Character.Humanoid
+
+            local headPos = hrp.Position + Vector3.new(0, hum.HipHeight + 2.5, 0)
+            local footPos = hrp.Position - Vector3.new(0, hum.HipHeight + 2.5, 0)
+
+            local headScreenPos, onScreen1 = workspace.CurrentCamera:WorldToViewportPoint(headPos)
+            local footScreenPos, onScreen2 = workspace.CurrentCamera:WorldToViewportPoint(footPos)
+
+            if onScreen1 and onScreen2 then
+                local height = math.abs(footScreenPos.Y - headScreenPos.Y)
+                local width = height / 2
+                box.Size = Vector2.new(width, height)
+                box.Position = Vector2.new(headScreenPos.X - width / 2, headScreenPos.Y)
+                box.Visible = true
+            else
+                box.Visible = false
+            end
+        else
+            box.Visible = false
+        end
+    end)
+    espConnections[player] = conn
+
+    -- Khi cht i màu 
+    player.CharacterAdded:Connect(function(char)
+        char:WaitForChild("Humanoid").Died:Connect(function()
+            if espObjects[player] then
+                espObjects[player].Color = Color3.fromRGB(255, 0, 0)
+            end
+        end)
+    end)
+end
+
+-- Xóa ESP
+local function removeESP()
+    for player, box in pairs(espObjects) do
+        if box then box:Remove() end
+        if espConnections[player] then
+            espConnections[player]:Disconnect()
+        end
+    end
+    espObjects = {}
+    espConnections = {}
+end
+
+-- Toggle WindUI bt/tt ESP
+ESPTab:Toggle({
+    Title = "ESP",
+    Value = false,
+    Callback = function(state)
+        WindUI:Notify({
+            Title = "ESP",
+            Content = state and "on" or "off",
+            Duration = 2
+        })
+
+        if state then
+            for _, player in pairs(Players:GetPlayers()) do
+                createESP(player)
+            end
+            Players.PlayerAdded:Connect(createESP)
+        else
+            removeESP()
+        end
+    end
+})
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+local espEnabled = false
+local espObjects = {}
+local useDrawing = false
+
+-- Kim tra Drawing API
+pcall(function()
+    local test = Drawing.new("Text")
+    if test then
+        useDrawing = true
+        test:Remove()
+    end
+end)
+
+-- Ch nhân vt load
+repeat task.wait() until LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+
+-- Hàm to ESP
+local function createESP(player)
+    if player == LocalPlayer or espObjects[player] then return end
+    
+    if useDrawing then
+        local text = Drawing.new("Text")
+        text.Size = 14
+        text.Center = true
+        text.Outline = true
+        text.Font = 2
+        text.Visible = false
+        espObjects[player] = {type = "Drawing", object = text}
+    else
+        if player.Character and player.Character:FindFirstChild("Head") then
+            local billboard = Instance.new("BillboardGui")
+            billboard.Size = UDim2.new(0, 200, 0, 50)
+            billboard.StudsOffset = Vector3.new(0, 2, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Adornee = player.Character.Head
+
+            local label = Instance.new("TextLabel")
+            label.Size = UDim2.new(1, 0, 1, 0)
+            label.BackgroundTransparency = 1
+            label.TextStrokeTransparency = 0
+            label.Font = Enum.Font.SourceSansBold
+            label.TextScaled = true
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.Parent = billboard
+
+            billboard.Parent = player.Character.Head
+            espObjects[player] = {type = "Billboard", gui = billboard, label = label}
+        end
+    end
+end
+
+-- Xóa ESP
+local function removeESP(player)
+    if espObjects[player] then
+        if espObjects[player].type == "Drawing" then
+            espObjects[player].object:Remove()
+        elseif espObjects[player].type == "Billboard" then
+            espObjects[player].gui:Destroy()
+        end
+        espObjects[player] = nil
+    end
+end
+
+-- Cp nht ESP mi frame
+RunService.RenderStepped:Connect(function()
+    if not espEnabled then
+        for _, esp in pairs(espObjects) do
+            if esp.type == "Drawing" then
+                esp.object.Visible = false
+            elseif esp.type == "Billboard" then
+                esp.label.Text = ""
+            end
+        end
+        return
+    end
+
+    for player, esp in pairs(espObjects) do
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Humanoid") then
+            local hum = player.Character.Humanoid
+            local hrp = player.Character.HumanoidRootPart
+            local health = hum.Health
+            local maxHealth = hum.MaxHealth
+            local distance = math.floor((LocalPlayer.Character.HumanoidRootPart.Position - hrp.Position).Magnitude)
+
+            if esp.type == "Drawing" then
+                local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position + Vector3.new(0, 2, 0))
+                if onScreen then
+                    esp.object.Position = Vector2.new(pos.X, pos.Y)
+                    esp.object.Text = string.format("%s | %dM", player.Name, distance)
+                    if health <= 0 then
+                        esp.object.Color = Color3.fromRGB(255, 0, 0)
+                    elseif health < maxHealth then
+                        esp.object.Color = Color3.fromRGB(255, 255, 0)
+                    else
+                        esp.object.Color = Color3.fromRGB(255, 255, 255)
+                    end
+                    esp.object.Visible = true
+                else
+                    esp.object.Visible = false
+                end
+            elseif esp.type == "Billboard" then
+                esp.label.Text = string.format("%s | %dM", player.Name, distance)
+                if health <= 0 then
+                    esp.label.TextColor3 = Color3.fromRGB(255, 0, 0)
+                elseif health < maxHealth then
+                    esp.label.TextColor3 = Color3.fromRGB(255, 255, 0)
+                else
+                    esp.label.TextColor3 = Color3.fromRGB(255, 255, 255)
+                end
+            end
+        end
+    end
+end)
+
+-- Player vào game
+Players.PlayerAdded:Connect(function(player)
+    player.CharacterAdded:Connect(function()
+        task.wait(1)
+        if espEnabled then createESP(player) end
+    end)
+    createESP(player)
+end)
+
+-- Player ri game
+Players.PlayerRemoving:Connect(removeESP)
+
+-- To ESP cho tt c player hin có
+for _, player in ipairs(Players:GetPlayers()) do
+    createESP(player)
+end
+
+-- Toggle WindUI bt/tt ESP
+ESPTab:Toggle({
+    Title = " ESP player ",
+    Value = false,
+    Callback = function(state)
+        espEnabled = state
+        WindUI:Notify({
+            Title = "ESP",
+            Content = state and "on" or "off",
+            Duration = 2
+        })
+    end
+})
